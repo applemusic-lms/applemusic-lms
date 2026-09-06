@@ -76,18 +76,29 @@ class Catalog:
         return parsed
 
     async def get_tracks(self, ids: list[str]) -> list[dict[str, Any]]:
-        """Batch catalog track lookup (<=300 ids)."""
+        """Batch track lookup. Handles catalog and library (i./l.) ids."""
         if not ids:
             return []
         sf = await self.storefront()
         catalog_ids = [i for i in ids if not parsers.is_library_id(i)]
+        library_ids = [i for i in ids if parsers.is_library_id(i)]
         out: list[dict[str, Any]] = []
-        for chunk_start in range(0, len(catalog_ids), 300):
-            chunk = catalog_ids[chunk_start : chunk_start + 300]
-            resp = await self._api.get(
-                f"catalog/{sf}/songs", ids=",".join(chunk), include="artists,albums"
-            )
-            out.extend(p for p in (parsers.parse_track(i) for i in resp.get("data", [])) if p)
+
+        for endpoint, group, size in (
+            (f"catalog/{sf}/songs", catalog_ids, 300),
+            ("me/library/songs", library_ids, 100),
+        ):
+            for start in range(0, len(group), size):
+                chunk = group[start : start + size]
+                try:
+                    resp = await self._api.get(
+                        endpoint, ids=",".join(chunk), include="artists,albums"
+                    )
+                except NotFound:
+                    continue
+                out.extend(
+                    p for p in (parsers.parse_track(i) for i in resp.get("data", [])) if p
+                )
         return out
 
     async def get_album(self, album_id: str) -> dict[str, Any]:
@@ -105,11 +116,21 @@ class Catalog:
 
     async def get_album_tracks(self, album_id: str) -> list[dict[str, Any]]:
         sf = await self.storefront()
-        if parsers.is_library_id(album_id):
-            endpoint = f"me/library/albums/{album_id}/tracks"
-        else:
-            endpoint = f"catalog/{sf}/albums/{album_id}/tracks"
-        items = await self._api.get_all(endpoint, include="artists,catalog")
+        is_lib = parsers.is_library_id(album_id)
+        endpoint = (
+            f"me/library/albums/{album_id}/tracks"
+            if is_lib
+            else f"catalog/{sf}/albums/{album_id}/tracks"
+        )
+        try:
+            items = await self._api.get_all(endpoint, include="artists,catalog")
+        except NotFound:
+            # a library id can go stale (item removed elsewhere, sync lag) - don't
+            # blow up playback of the rest of a queue over it
+            if is_lib:
+                _LOGGER.info("library album %s has no tracks / is gone", album_id)
+                return []
+            raise
         return [p for p in (parsers.parse_track(i) for i in items) if p]
 
     async def get_artist(self, artist_id: str) -> dict[str, Any]:
@@ -122,12 +143,20 @@ class Catalog:
 
     async def get_artist_albums(self, artist_id: str) -> list[dict[str, Any]]:
         sf = await self.storefront()
-        items = await self._api.get_all(f"catalog/{sf}/artists/{artist_id}/albums")
+        try:
+            items = await self._api.get_all(f"catalog/{sf}/artists/{artist_id}/albums")
+        except NotFound:
+            _LOGGER.info("no albums for artist %s", artist_id)
+            return []
         return [p for p in (parsers.parse_album(i) for i in items) if p]
 
     async def get_artist_top_tracks(self, artist_id: str) -> list[dict[str, Any]]:
         sf = await self.storefront()
-        resp = await self._api.get(f"catalog/{sf}/artists/{artist_id}/view/top-songs")
+        try:
+            resp = await self._api.get(f"catalog/{sf}/artists/{artist_id}/view/top-songs")
+        except NotFound:
+            _LOGGER.info("no top songs for artist %s", artist_id)
+            return []
         return [p for p in (parsers.parse_track(i) for i in resp.get("data", [])) if p]
 
     async def get_playlist(self, playlist_id: str) -> dict[str, Any]:
@@ -144,11 +173,19 @@ class Catalog:
 
     async def get_playlist_tracks(self, playlist_id: str) -> list[dict[str, Any]]:
         sf = await self.storefront()
-        if playlist_id.startswith("pl."):
-            endpoint = f"catalog/{sf}/playlists/{playlist_id}/tracks"
-        else:
-            endpoint = f"me/library/playlists/{playlist_id}/tracks"
-        items = await self._api.get_all(endpoint, include="artists,catalog")
+        is_lib = not playlist_id.startswith("pl.")
+        endpoint = (
+            f"me/library/playlists/{playlist_id}/tracks"
+            if is_lib
+            else f"catalog/{sf}/playlists/{playlist_id}/tracks"
+        )
+        try:
+            items = await self._api.get_all(endpoint, include="artists,catalog")
+        except NotFound:
+            if is_lib:
+                _LOGGER.info("library playlist %s has no tracks / is gone", playlist_id)
+                return []
+            raise
         tracks = []
         for i in items:
             p = parsers.parse_track(i)
