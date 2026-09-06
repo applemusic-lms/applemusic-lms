@@ -15,6 +15,8 @@ use base qw(Slim::Formats::RemoteStream);
 
 use Scalar::Util qw(blessed);
 
+use Slim::Control::Request;
+use Slim::Player::Playlist;
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -65,6 +67,16 @@ sub getNextTrack {
 
 	my $streamUrl = Plugins::AppleMusic::API->streamUrl($id);   # no seek: $START$ adds it
 
+	# metadata is usually already cached from the browse list that queued this
+	# track - use it and don't stall the stream on a lookup
+	if ( my $meta = $cache->get("ameta:$url") ) {
+		$song->duration($meta->{duration}) if $meta->{duration};
+		$song->pluginData(meta => $meta);
+		main::INFOLOG && $log->is_info && $log->info("stream $url -> $streamUrl (cached meta)");
+		$song->streamUrl($streamUrl);
+		return $successCb->();
+	}
+
 	Plugins::AppleMusic::API->trackMeta($id, sub {
 		my $meta = shift;
 		if ( $meta && ref $meta && $meta->{duration} ) {
@@ -110,7 +122,10 @@ sub explodePlaylist {
 	my $api  = 'Plugins::AppleMusic::API';
 	my $done = sub {
 		my $data = shift || {};
-		$cb->([ map { $_->{uri} } grep { $_->{available} } @{ $data->{tracks} || [] } ]);
+		my @tracks = grep { $_->{available} } @{ $data->{tracks} || [] };
+		# stash metadata now so the playlist view has titles/art immediately
+		_cacheMeta($_->{uri}, $_) for grep { $_->{uri} } @tracks;
+		$cb->([ map { $_->{uri} } @tracks ]);
 	};
 	my $fail = sub { $cb->([]) };
 
@@ -123,39 +138,23 @@ sub explodePlaylist {
 # ------------------------------------------------------------------ metadata
 sub _cacheMeta {
 	my ($url, $meta) = @_;
+	return unless $url && $meta && ref $meta;
 	$cache->set("ameta:$url", $meta, 86400);
 }
 
-sub getMetadataFor {
-	my ($class, $client, $url, undef, $song) = @_;
-
-	my $id = _idFromUrl($url) or return {};
-
-	my $meta;
-	$meta = $song->pluginData('meta') if $song && $song->can('pluginData');
-	$meta ||= $cache->get("ameta:$url");
-
-	if ( !$meta ) {
-		if ( $client && !$client->master->pluginData('fetchingMeta') ) {
-			$client->master->pluginData(fetchingMeta => 1);
-			Plugins::AppleMusic::API->trackMeta($id, sub {
-				my $m = shift;
-				_cacheMeta($url, $m) if $m && ref $m;
-				$client->master->pluginData(fetchingMeta => 0);
-				Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
-			}, sub {
-				$client->master->pluginData(fetchingMeta => 0);
-			});
-		}
-		return {
-			title   => cstring($client, 'PLUGIN_APPLEMUSIC_LOADING'),
-			cover   => IMG_TRACK,
-			icon    => IMG_TRACK,
-			bitrate => '256k',
-			type    => 'Apple Music (AAC)',
-		};
+# public: stash one track obj (or a list) from a browse menu so the playlist
+# view and getNextTrack find it without a round-trip
+sub cacheMeta {
+	my ($class, @objs) = @_;
+	for my $obj ( map { ref $_ eq 'ARRAY' ? @$_ : $_ } @objs ) {
+		next unless ref $obj eq 'HASH';
+		my $url = $obj->{uri} || ($obj->{id} && "applemusic://track/$obj->{id}");
+		_cacheMeta($url, $obj);
 	}
+}
 
+sub _renderMeta {
+	my $meta = shift;
 	return {
 		title    => $meta->{title},
 		artist   => $meta->{artist},
@@ -170,6 +169,65 @@ sub getMetadataFor {
 		bitrate  => '256k',
 		type     => 'Apple Music (AAC)',
 	};
+}
+
+sub getMetadataFor {
+	my ($class, $client, $url, undef, $song) = @_;
+
+	my $id = _idFromUrl($url) or return {};
+
+	my $meta;
+	$meta = $song->pluginData('meta') if blessed($song) && $song->can('pluginData');
+	$meta ||= $cache->get("ameta:$url");
+
+	return _renderMeta($meta) if $meta;
+
+	# miss - pull every still-unknown Apple Music track in this playlist in one
+	# request, then nudge the UI to redraw
+	_prefetchPlaylist($client) if $client;
+
+	return {
+		title   => cstring($client, 'PLUGIN_APPLEMUSIC_LOADING'),
+		cover   => IMG_TRACK,
+		icon    => IMG_TRACK,
+		bitrate => '256k',
+		type    => 'Apple Music (AAC)',
+	};
+}
+
+sub _prefetchPlaylist {
+	my $client = shift or return;
+	$client = $client->master;
+
+	return if $client->pluginData('fetchingMeta');
+
+	# ids we've already asked about this session - Apple won't return every id
+	# (region-locked etc.), so remember and don't refetch them on every redraw
+	my $tried = $client->pluginData('metaTried') || {};
+
+	my (@ids, %seen);
+	for my $track ( @{ Slim::Player::Playlist::playList($client) || [] } ) {
+		my $turl = blessed($track) ? $track->url : $track;
+		my $tid  = _idFromUrl($turl) or next;
+		next if $seen{$tid}++ || $tried->{$tid} || $cache->get("ameta:$turl");
+		push @ids, $tid;
+		last if @ids >= 50;
+	}
+	return unless @ids;
+
+	$tried->{$_} = 1 for @ids;
+	$client->pluginData(metaTried => $tried);
+	$client->pluginData(fetchingMeta => 1);
+
+	Plugins::AppleMusic::API->tracksMeta(\@ids, sub {
+		my $data = shift || {};
+		_cacheMeta($_->{uri} || "applemusic://track/$_->{id}", $_)
+			for @{ $data->{tracks} || [] };
+		$client->pluginData(fetchingMeta => 0);
+		Slim::Control::Request::notifyFromArray($client, ['newmetadata']);
+	}, sub {
+		$client->pluginData(fetchingMeta => 0);
+	});
 }
 
 sub getIcon {

@@ -11,6 +11,7 @@ use Slim::Utils::Prefs;
 use Slim::Utils::Strings qw(cstring);
 
 use Plugins::AppleMusic::API;
+use Plugins::AppleMusic::ProtocolHandler;
 
 my $log   = logger('plugin.applemusic');
 my $prefs = preferences('plugin.applemusic');
@@ -166,6 +167,8 @@ sub _item {
 	my $type = $obj->{type} || '';
 
 	if ( $type eq 'track' ) {
+		# so the playlist view / protocol handler have it without a round-trip
+		Plugins::AppleMusic::ProtocolHandler->cacheMeta($obj);
 		return {
 			name        => $obj->{title},
 			line1       => $obj->{title},
