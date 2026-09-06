@@ -1,5 +1,12 @@
 [% PROCESS settings/header.html %]
 
+[%# auto-refresh the status panel while the helper is still settling (fetching
+    its binary/ffmpeg, or not yet reachable) - stops once things are green.
+    skip right after a button press so the result message stays readable %]
+[% IF !warning && (amProc.downloading || amHealth.ffmpeg_downloading || !amHelperUp) %]
+<script>setTimeout(function(){ location.replace(location.href); }, 8000);</script>
+[% END %]
+
 <style>
 	.amStatus { border-collapse: collapse; margin: 4px 0 10px; }
 	.amStatus td { padding: 3px 14px 3px 0; vertical-align: top; }
