@@ -1,0 +1,22 @@
+name: set version
+description: >
+  Resolve the version (from the git tag, or 0.0.0 for non-tag builds) and stamp
+  it into install.xml / helper __init__.py / pyproject.toml. The tag is the
+  single source of truth - nothing is version-bumped by hand.
+outputs:
+  version:
+    description: resolved version
+    value: ${{ steps.v.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: v
+      shell: bash
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          V="${GITHUB_REF_NAME#v}"
+        else
+          V="0.0.0"
+        fi
+        echo "version=$V" >> "$GITHUB_OUTPUT"
+        bash scripts/set-version.sh "$V"

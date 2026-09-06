@@ -1,0 +1,6 @@
+# applemusic-helper runtime dependencies.
+# All ship prebuilt wheels for x86_64 and aarch64 (manylinux / musllinux),
+# so `pip install` needs no compiler in the LMS container.
+aiohttp>=3.13.1,<4
+pywidevine==1.9.0
+# pywidevine pulls in: protobuf, pymp4, pycryptodome, click, requests, Unidecode, PyYAML

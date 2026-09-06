@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "applemusic-helper"
+version = "0.0.0"
+description = "Local sidecar that lets the Apple Music LMS plugin stream Apple Music"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-only" }
+authors = [{ name = "applemusic-lms contributors" }]
+dependencies = [
+    "aiohttp>=3.13.1,<4",
+    "pywidevine==1.9.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "aioresponses>=0.7"]
+
+[project.scripts]
+applemusic-helper = "applemusic_helper.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["applemusic_helper*"]
+
+[tool.setuptools.package-data]
+applemusic_helper = ["*.html"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

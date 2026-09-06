@@ -1,0 +1,145 @@
+name: build & release
+
+# push to main / PR  -> build every platform, run --selftest, upload a
+#                       release-bundle artifact (validation only, no release)
+# push tag v*         -> same, then publish a GitHub Release with the zip,
+#                       all helper + ffmpeg binaries, sha256sums.txt and repo.xml
+#
+# LMS repo URL (always the newest release):
+#   https://github.com/applemusic-lms/applemusic-lms/releases/latest/download/repo.xml
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PY: "3.12"
+
+jobs:
+  # ------------------------------------------------------------------ helper
+  helper:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-22.04,     platform: x86_64-linux }
+          - { runner: ubuntu-24.04-arm, platform: aarch64-linux }
+          - { runner: windows-latest,   platform: win-x64 }
+          # Apple Silicon only. non-blocking (unsigned anyway). Intel macOS
+          # (macos-13) is omitted: its runners can sit un-picked-up for hours,
+          # which stalls the whole release. Add back if there's demand.
+          - { runner: macos-14,         platform: darwin-arm64,   optional: true }
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.optional || false }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setver
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PY }}" }
+      - name: build
+        shell: bash
+        run: |
+          python -m pip install -U pip pyinstaller
+          python -m pip install -r helper/requirements.txt ./helper
+          pyinstaller --onefile --name applemusic-helper --console \
+            --collect-all pywidevine \
+            --collect-submodules aiohttp \
+            --collect-data applemusic_helper \
+            helper/pyinstaller_entry.py
+      - name: selftest + stage
+        shell: bash
+        run: |
+          mkdir -p out
+          if [ "${{ matrix.platform }}" = win-x64 ]; then
+            dist/applemusic-helper.exe --selftest
+            dist/applemusic-helper.exe --version
+            cp dist/applemusic-helper.exe "out/applemusic-helper-${{ matrix.platform }}.exe"
+          else
+            dist/applemusic-helper --selftest
+            dist/applemusic-helper --version
+            cp dist/applemusic-helper "out/applemusic-helper-${{ matrix.platform }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: helper-${{ matrix.platform }}
+          path: out/*
+
+  # 32-bit ARM via QEMU - flaky, so non-blocking: a failure here still lets a
+  # release go out (64-bit Pis use aarch64-linux).
+  helper-armv7:
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setver
+      - uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: armv7
+          distro: bookworm
+          dockerRunArgs: --volume "${{ github.workspace }}:/work"
+          install: |
+            apt-get update -q
+            apt-get install -qy python3 python3-pip python3-venv binutils
+          run: |
+            cd /work
+            python3 -m pip install --break-system-packages -U pip pyinstaller
+            python3 -m pip install --break-system-packages -r helper/requirements.txt ./helper
+            pyinstaller --onefile --name applemusic-helper --console \
+              --collect-all pywidevine --collect-submodules aiohttp \
+              --collect-data applemusic_helper helper/pyinstaller_entry.py
+            ./dist/applemusic-helper --selftest
+            mkdir -p out && cp dist/applemusic-helper out/applemusic-helper-arm-linux
+      - uses: actions/upload-artifact@v4
+        with: { name: helper-arm-linux, path: out/* }
+
+  # ------------------------------------------------------------------ ffmpeg
+  ffmpeg:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/repackage-ffmpeg.sh out
+      - uses: actions/upload-artifact@v4
+        with: { name: ffmpeg, path: out/* }
+
+  # ------------------------------------------------------------------ assemble
+  assemble:
+    needs: [helper, helper-armv7, ffmpeg]
+    # run as long as the required builds succeeded; armv7 is best-effort
+    if: ${{ always() && needs.helper.result == 'success' && needs.ffmpeg.result == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write        # only used by the release step (tags only)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setver
+        id: ver
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+
+      - name: build bundle
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name 'applemusic-helper-*' -o -name 'ffmpeg-*.tar.gz' \) \
+            -exec cp {} dist/ \;
+          ( cd plugin/Plugins && zip -qr "../../dist/AppleMusic-${VERSION}.zip" AppleMusic )
+          bash scripts/gen-repo-xml.sh "${VERSION}" "${{ github.repository }}" > dist/repo.xml
+          ( cd dist && sha256sum -- AppleMusic-*.zip applemusic-helper-* ffmpeg-*.tar.gz repo.xml \
+              > sha256sums.txt )
+          echo "--- release contents ---"; ls -la dist
+          echo "--- repo.xml ---"; cat dist/repo.xml
+
+      - uses: actions/upload-artifact@v4
+        with: { name: release-bundle, path: dist/* }
+
+      - name: publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

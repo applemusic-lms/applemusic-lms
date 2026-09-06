@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="yes"?>
+<extension>
+	<name>PLUGIN_APPLEMUSIC_NAME</name>
+	<creator>applemusic-lms contributors</creator>
+	<defaultState>enabled</defaultState>
+	<description>PLUGIN_APPLEMUSIC_DESC</description>
+	<email>noreply@example.com</email>
+	<category>musicservices</category>
+	<id>Plugins::AppleMusic::Plugin</id>
+	<module>Plugins::AppleMusic::Plugin</module>
+	<optionsURL>plugins/AppleMusic/settings/basic.html</optionsURL>
+	<icon>plugins/AppleMusic/html/images/icon.png</icon>
+	<targetApplication>
+		<id>SqueezeCenter</id>
+		<minVersion>8.0</minVersion>
+		<maxVersion>*</maxVersion>
+	</targetApplication>
+	<type>2</type>
+	<version>0.0.0</version>
+</extension>

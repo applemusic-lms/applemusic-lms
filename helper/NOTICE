@@ -1,0 +1,33 @@
+applemusic-helper
+Copyright (c) 2026 applemusic-lms contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 3 as published by the Free
+Software Foundation. See the LICENSE file in this directory.
+
+--------------------------------------------------------------------------------
+
+This product includes software adapted from Music Assistant (the "server"
+repository), https://github.com/music-assistant/server, which is licensed under
+the Apache License, Version 2.0:
+
+    Copyright the Music Assistant contributors
+
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not
+    use this file except in compliance with the License. You may obtain a copy
+    of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+The following modules are derived from Music Assistant's `apple_music` provider
+(music_assistant/providers/apple_music/*):
+
+  - applemusic_helper/apple_api.py      (from api_client.py)
+  - applemusic_helper/widevine.py       (from streaming.py)
+  - applemusic_helper/stream.py         (from streaming.py)
+  - applemusic_helper/parsers.py        (from parsers.py)
+  - applemusic_helper/catalog.py        (from media.py / library.py)
+  - applemusic_helper/musickit.html     (from musickit_auth/musickit_wrapper.html)
+
+Apache-2.0 is one-way compatible with GPL-3.0; the combined work is distributed
+under GPL-3.0-only.

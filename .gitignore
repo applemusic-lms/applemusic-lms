@@ -1,0 +1,22 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# local runtime
+config.json
+dev-config.json
+*.log
+*.wvd
+client_id.bin
+private_key.pem
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/

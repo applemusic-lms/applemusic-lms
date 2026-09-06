@@ -1,0 +1,18 @@
+{
+  "bind_host": "127.0.0.1",
+  "bind_port": 9863,
+  "public_url": "",
+
+  "audio_format": "flac",
+  "ffmpeg_path": "ffmpeg",
+  "log_level": "INFO",
+
+  "cdm_wvd_path": "device.wvd",
+  "cdm_client_id_path": "",
+  "cdm_private_key_path": "",
+
+  "developer_token": "",
+  "developer_token_manual": false,
+  "media_user_token": "",
+  "storefront": ""
+}

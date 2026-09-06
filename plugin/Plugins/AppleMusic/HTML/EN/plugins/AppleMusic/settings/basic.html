@@ -1,0 +1,93 @@
+[% PROCESS settings/header.html %]
+
+<style>
+	.amStatus { border-collapse: collapse; margin: 4px 0 10px; }
+	.amStatus td { padding: 3px 14px 3px 0; vertical-align: top; }
+	.amStatus td.k { font-weight: bold; white-space: nowrap; }
+	.amYes { color: #1a8f3c; font-weight: bold; }
+	.amNo  { color: #d70015; font-weight: bold; }
+	.amMuted { opacity: .7; }
+	.amBtns { margin-top: 8px; }
+	.amBtns button { margin-right: 6px; }
+	.amRadio { margin: 2px 0; }
+</style>
+
+[% WRAPPER setting title="Helper" desc="" %]
+	<table class="amStatus">
+		<tr><td class="k">Process</td><td>
+			[% IF amProc.running %]<span class="amYes">running</span>[% IF amProc.port %] <span class="amMuted">port [% amProc.port %]</span>[% END %]
+			[% ELSIF amProc.downloading %]<span class="amMuted">downloading binary&hellip;</span>
+			[% ELSE %]<span class="amNo">stopped</span>[% END %]
+			[% IF amProc.error %]<br><span class="amNo">[% amProc.error | html %]</span>[% END %]</td></tr>
+		<tr><td class="k">Platform</td><td>[% amPlatform | html %]</td></tr>
+		[% IF amHelperUp %]
+		<tr><td class="k">Reachable</td><td><span class="amYes">yes</span>
+			[% IF amHealthAge.defined %]<span class="amMuted">(checked [% amHealthAge %]s ago)</span>[% END %]</td></tr>
+		<tr><td class="k">Version</td><td>[% amHealth.version | html %]</td></tr>
+		<tr><td class="k">Config file</td><td><code>[% amHealth.config_path | html %]</code></td></tr>
+		<tr><td class="k">ffmpeg</td><td>
+			[% IF amHealth.ffmpeg_ok %]<span class="amYes">[% amHealth.ffmpeg_version | html %] &check;</span>
+			[% ELSIF amHealth.ffmpeg_downloading %]<span class="amMuted">downloading&hellip;</span>
+			[% ELSE %]<span class="amNo">[% amHealth.ffmpeg_version | html %] &mdash; needs &ge; 6.1</span>[% END %]
+			<span class="amMuted"><br><code>[% amHealth.ffmpeg_path | html %]</code></span></td></tr>
+		<tr><td class="k">Developer token</td><td>
+			[% amHealth.developer_token_ok ? '<span class="amYes">ok</span>' : '<span class="amNo">missing / expired</span>' %]</td></tr>
+		<tr><td class="k">Signed in</td><td>
+			[% IF amHealth.user_token_ok %]<span class="amYes">yes</span>[% IF amHealth.storefront %] <span class="amMuted">(storefront [% amHealth.storefront | html %])</span>[% END %]
+			[% ELSE %]<span class="amNo">no</span> &mdash; <a href="[% amAuthUrl | html %]" target="_blank">sign in</a>[% END %]</td></tr>
+		<tr><td class="k">Widevine CDM</td><td>
+			[% IF amHealth.cdm_ok %]<span class="amYes">ok</span>[% ELSE %]<span class="amNo">[% amHealth.cdm_status | html %]</span>[% END %]</td></tr>
+		[% ELSE %]
+		<tr><td class="k">Reachable</td><td><span class="amNo">no</span> <span class="amMuted">&mdash; not started yet, or still downloading</span></td></tr>
+		[% END %]
+	</table>
+
+	<div class="amBtns">
+		<button type="submit" name="helperAction" value="start">Start</button>
+		<button type="submit" name="helperAction" value="stop">Stop</button>
+		<button type="submit" name="helperAction" value="restart">Restart</button>
+		<button type="submit" name="reloadCdm" value="1">Reload config &amp; CDM</button>
+	</div>
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_APPLEMUSIC_CDM" desc="PLUGIN_APPLEMUSIC_CDM_DESC" %]
+	<label class="amMuted">device.wvd</label><br>
+	<input type="text" class="stdedit selectFile" id="cdmWvd" name="pref_cdmWvd" value="[% prefs.cdmWvd | html %]" size="52"><br><br>
+	<label class="amMuted">&hellip; or a client_id.bin / private_key.pem pair:</label><br>
+	<input type="text" class="stdedit selectFile" id="cdmClientId" name="pref_cdmClientId" value="[% prefs.cdmClientId | html %]" size="52"><br>
+	<input type="text" class="stdedit selectFile" id="cdmPrivateKey" name="pref_cdmPrivateKey" value="[% prefs.cdmPrivateKey | html %]" size="52">
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_APPLEMUSIC_FFMPEG" desc="PLUGIN_APPLEMUSIC_FFMPEG_DESC" %]
+	<div class="amRadio"><input type="radio" name="pref_ffmpegSource" value="auto"   [% 'checked' IF prefs.ffmpegSource != 'system' && prefs.ffmpegSource != 'custom' %]> Download automatically (recommended)</div>
+	<div class="amRadio"><input type="radio" name="pref_ffmpegSource" value="system" [% 'checked' IF prefs.ffmpegSource == 'system' %]> Use <code>ffmpeg</code> from the system PATH</div>
+	<div class="amRadio"><input type="radio" name="pref_ffmpegSource" value="custom" [% 'checked' IF prefs.ffmpegSource == 'custom' %]> Custom path:</div>
+	<input type="text" class="stdedit selectFile" id="ffmpegPath" name="pref_ffmpegPath" value="[% prefs.ffmpegPath | html %]" size="52">
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_APPLEMUSIC_AUDIO_FORMAT" desc="PLUGIN_APPLEMUSIC_AUDIO_FORMAT_DESC" %]
+	<select name="pref_audioFormat">
+		<option value="flac" [% 'selected="selected"' IF prefs.audioFormat != 'aac' %]>FLAC (decoded)</option>
+		<option value="aac"  [% 'selected="selected"' IF prefs.audioFormat == 'aac' %]>AAC (passthrough)</option>
+	</select>
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_APPLEMUSIC_CLEANUP_TAGS" desc="PLUGIN_APPLEMUSIC_CLEANUP_TAGS_DESC" %]
+	<input type="checkbox" name="pref_cleanupTags" value="1" [% 'checked="checked"' IF prefs.cleanupTags %] />
+[% END %]
+
+[% WRAPPER setting title="Advanced" desc="" %]
+	<label class="amMuted">Helper port</label>
+	<input type="text" class="stdedit" name="pref_helperPort" value="[% prefs.helperPort | html %]" size="6"><br>
+	<label class="amMuted">Helper binary override (e.g. <code>python3 -m applemusic_helper</code>)</label>
+	<input type="text" class="stdedit" name="pref_helperBinary" value="[% prefs.helperBinary | html %]" size="52"><br>
+	<label class="amMuted">Download repo (owner/repo)</label>
+	<input type="text" class="stdedit" name="pref_distRepo" value="[% prefs.distRepo | html %]" size="30">
+[% END %]
+
+[% WRAPPER setting title="About" desc="" %]
+	<i><p>Unofficial. Drives the Apple Music web-player interface via a local helper;
+	not affiliated with or endorsed by Apple. 256&nbsp;kbps AAC only.</p></i>
+[% END %]
+
+[% PROCESS settings/footer.html %]

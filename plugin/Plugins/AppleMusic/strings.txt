@@ -1,0 +1,83 @@
+PLUGIN_APPLEMUSIC_NAME
+	EN	Apple Music
+
+PLUGIN_APPLEMUSIC_DESC
+	EN	Stream your Apple Music subscription (unofficial). Supply a Widevine CDM; the helper and ffmpeg download automatically.
+
+PLUGIN_APPLEMUSIC_CDM_DESC
+	EN	Point at your own Widevine L3 CDM. Either a single device.wvd file, or a client_id.bin + private_key.pem pair. Nothing is bundled. Required for catalog playback.
+
+PLUGIN_APPLEMUSIC_FFMPEG
+	EN	ffmpeg
+
+PLUGIN_APPLEMUSIC_FFMPEG_DESC
+	EN	The helper needs ffmpeg 6.1 or newer (older builds cannot decrypt Apple's streams). "Download automatically" fetches a verified static build for this platform.
+
+PLUGIN_APPLEMUSIC_MY_MUSIC
+	EN	My Music
+
+PLUGIN_APPLEMUSIC_MADE_FOR_YOU
+	EN	Made For You
+
+PLUGIN_APPLEMUSIC_RADIO
+	EN	Radio Stations
+
+PLUGIN_APPLEMUSIC_TOP_SONGS
+	EN	Top Songs
+
+PLUGIN_APPLEMUSIC_LOADING
+	EN	Loading from Apple Music…
+
+PLUGIN_APPLEMUSIC_NOT_SIGNED_IN
+	EN	Not signed in to Apple Music
+
+PLUGIN_APPLEMUSIC_SIGN_IN_AT
+	EN	Open this URL in a browser to sign in:
+
+PLUGIN_APPLEMUSIC_SIGN_IN_BUTTON
+	EN	Sign in to Apple Music
+
+PLUGIN_APPLEMUSIC_NO_CDM
+	EN	No Widevine CDM configured – catalog playback is disabled
+
+PLUGIN_APPLEMUSIC_HELPER_DOWN
+	EN	Apple Music helper is not reachable
+
+PLUGIN_APPLEMUSIC_ERROR
+	EN	Error
+
+PLUGIN_APPLEMUSIC_HELPER_URL
+	EN	Helper URL
+
+PLUGIN_APPLEMUSIC_HELPER_URL_DESC
+	EN	Address of the applemusic-helper sidecar. Default http://127.0.0.1:9863 (same host as LMS).
+
+PLUGIN_APPLEMUSIC_STATUS
+	EN	Helper status
+
+PLUGIN_APPLEMUSIC_DEV_TOKEN
+	EN	Developer token
+
+PLUGIN_APPLEMUSIC_SIGNED_IN
+	EN	Signed in
+
+PLUGIN_APPLEMUSIC_CDM
+	EN	Widevine CDM
+
+PLUGIN_APPLEMUSIC_FORMAT
+	EN	Audio format
+
+PLUGIN_APPLEMUSIC_CDM_HINT
+	EN	The developer token is fetched automatically. Sign-in and the CDM are configured in the helper's config.json on the server.
+
+PLUGIN_APPLEMUSIC_AUDIO_FORMAT
+	EN	Audio delivery
+
+PLUGIN_APPLEMUSIC_AUDIO_FORMAT_DESC
+	EN	FLAC: the helper decodes to lossless FLAC (more CPU on the server). AAC: the original 256 kbps AAC is passed through and LMS transcodes it per player.
+
+PLUGIN_APPLEMUSIC_CLEANUP_TAGS
+	EN	Clean up track titles
+
+PLUGIN_APPLEMUSIC_CLEANUP_TAGS_DESC
+	EN	Strip "(Remastered)", "(Deluxe Edition)" and similar noise from titles and album names.
