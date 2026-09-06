@@ -67,8 +67,6 @@ sub handler {
 	$params->{amHelperUp}  = ($health && ref $health) ? 1 : 0;
 	$params->{amHealth}    = $health if $health && ref $health;
 	$params->{amHealthAge} = $age if defined $age;
-	$params->{amAuthUrl}   = ($health && $health->{auth_url})
-		|| (($prefs->get('helperUrl') || 'http://127.0.0.1:9863') . '/auth');
 	$params->{amPlatform}  = Plugins::AppleMusic::Helper->platform;
 
 	my $body = $class->SUPER::handler( $client, $params, $callback, @args );

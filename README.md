@@ -15,8 +15,8 @@ players through [Lyrion Music Server](https://lyrion.org) (LMS).
    - **CDM** — point at your own Widevine L3 CDM (`device.wvd`, or a
      `client_id.bin` + `private_key.pem` pair). Nothing DRM‑related is bundled.
    - **ffmpeg** — leave on *Download automatically*.
-   - Click **sign in** and complete Apple's login (see
-     [`docs/README.md`](docs/README.md#3-sign-in) for headless boxes).
+   - **Apple Music account** — paste your media‑user‑token to sign in
+     ([`docs/README.md`](docs/README.md#4-sign-in)).
 
 The plugin downloads the helper binary and a modern static ffmpeg for your platform on
 first run (~50 MB, once).

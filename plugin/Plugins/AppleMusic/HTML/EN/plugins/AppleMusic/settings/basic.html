@@ -15,7 +15,10 @@
 	.amNo  { color: #d70015; font-weight: bold; }
 	.amMuted { opacity: .7; }
 	.amBtns { margin-top: 8px; }
-	.amBtns button { margin-right: 6px; }
+	.amBtns button, button.amBtn { margin-right: 6px; }
+	#amAcct ol { margin: 6px 0 10px; }
+	#amAcct code { background: rgba(128,128,128,.16); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+	#amAcctMsg:empty { display: none; }
 	.amRadio { margin: 2px 0; }
 </style>
 
@@ -41,7 +44,7 @@
 			[% amHealth.developer_token_ok ? '<span class="amYes">ok</span>' : '<span class="amNo">missing / expired</span>' %]</td></tr>
 		<tr><td class="k">Signed in</td><td>
 			[% IF amHealth.user_token_ok %]<span class="amYes">yes</span>[% IF amHealth.storefront %] <span class="amMuted">(storefront [% amHealth.storefront | html %])</span>[% END %]
-			[% ELSE %]<span class="amNo">no</span> &mdash; <a href="[% amAuthUrl | html %]" target="_blank">sign in</a>[% END %]</td></tr>
+			[% ELSE %]<span class="amNo">no</span> <span class="amMuted">&mdash; see "Apple Music account" below</span>[% END %]</td></tr>
 		<tr><td class="k">Widevine CDM</td><td>
 			[% IF amHealth.cdm_ok %]<span class="amYes">ok</span>[% ELSE %]<span class="amNo">[% amHealth.cdm_status | html %]</span>[% END %]</td></tr>
 		[% ELSE %]
@@ -55,6 +58,71 @@
 		<button type="submit" name="helperAction" value="restart">Restart</button>
 		<button type="submit" name="reloadCdm" value="1">Reload config &amp; CDM</button>
 	</div>
+[% END %]
+
+[% WRAPPER setting title="Apple Music account" desc="" %]
+	<div id="amAcct">
+	[% IF amHealth.user_token_ok %]
+		<p>Signed in[% IF amHealth.storefront %] &mdash; Apple Music <b>[% amHealth.storefront | html | upper %]</b>[% END %].</p>
+		<button type="button" class="amBtn" id="amSignOut">Sign out</button>
+	[% ELSE %]
+		<p class="amMuted">The helper streams via the Apple Music web player, which needs your
+		account's <b>media&#8209;user&#8209;token</b>. Copy it from a signed&#8209;in
+		<code>music.apple.com</code> tab:</p>
+		<ol class="amMuted" style="margin:6px 0 10px; padding-left:20px">
+			<li>Open <a href="https://music.apple.com" target="_blank" rel="noopener">music.apple.com</a> and sign in.</li>
+			<li>Open the browser console (<code>F12</code> / <code>&#8997;&#8984;J</code>), paste
+				<code>copy(MusicKit.getInstance().musicUserToken)</code> and press Enter.</li>
+			<li>Paste below (it's on your clipboard).</li>
+		</ol>
+		<label class="amMuted" for="amTok">media-user-token</label><br>
+		<textarea id="amTok" rows="3" style="width:100%; max-width:560px; font:12px/1.4 ui-monospace,Menlo,monospace" placeholder="Aut&hellip; long base64-ish string ending in =="></textarea>
+		<div style="margin-top:10px"><button type="button" class="amBtn" id="amSignIn">Sign in &amp; verify</button></div>
+	[% END %]
+		<p id="amAcctMsg" class="amMuted"></p>
+	</div>
+	<script>
+	(function(){
+		var msg = document.getElementById('amAcctMsg');
+		function done(cls, text){ msg.className = cls; msg.textContent = text; }
+		function post(url, payload, ok, btn){
+			done('amMuted', 'Contacting Apple Music... (up to ~15s)');
+			fetch(url, {
+				method: 'POST',
+				headers: {'Content-Type':'application/json'},
+				body: JSON.stringify(payload || {})
+			}).then(function(r){ return r.json().then(function(b){ return {r:r, b:b}; }); })
+			  .then(function(x){
+				if (!x.r.ok) throw new Error(x.b && x.b.error || ('HTTP ' + x.r.status));
+				ok(x.b);
+			}).catch(function(e){
+				done('amNo', 'Failed: ' + (e && e.message || e));
+				if (btn) btn.disabled = false;
+			});
+		}
+		var si = document.getElementById('amSignIn');
+		if (si) si.onclick = function(){
+			var tok = document.getElementById('amTok').value.trim();
+			if (tok.length < 20) { done('amNo', 'Enter a token first.'); return; }
+			si.disabled = true;
+			post('/plugins/AppleMusic/auth/token',
+				{ media_user_token: tok },
+				function(b){
+					done('amYes', 'Connected' + (b.storefront ? ' - Apple Music ' + b.storefront.toUpperCase() : '') +
+						(b.warning ? ' (' + b.warning + ')' : '') + '. Reloading...');
+					setTimeout(function(){ location.replace(location.href); }, 1200);
+				}, si);
+		};
+		var so = document.getElementById('amSignOut');
+		if (so) so.onclick = function(){
+			so.disabled = true;
+			post('/plugins/AppleMusic/auth/signout', {}, function(){
+				done('amYes', 'Signed out. Reloading...');
+				setTimeout(function(){ location.replace(location.href); }, 900);
+			}, so);
+		};
+	})();
+	</script>
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_APPLEMUSIC_CDM" desc="PLUGIN_APPLEMUSIC_CDM_DESC" %]

@@ -26,9 +26,10 @@ sub handleFeed {
 
 		if ( !$health->{user_token_ok} ) {
 			return $cb->({ items => [{
-				name => cstring($client, 'PLUGIN_APPLEMUSIC_NOT_SIGNED_IN'),
-				type => 'text',
-			}, _signInHint($client, $health) ] });
+				name    => cstring($client, 'PLUGIN_APPLEMUSIC_NOT_SIGNED_IN'),
+				type    => 'link',
+				weblink => '/settings/plugins/AppleMusic/settings/basic.html',
+			}] });
 		}
 
 		my @items = (
@@ -78,15 +79,6 @@ sub handleFeed {
 			type => 'text',
 		}] });
 	});
-}
-
-sub _signInHint {
-	my ($client, $health) = @_;
-	my $url = $health->{auth_url} || ($prefs->get('helperUrl') . '/auth');
-	return {
-		name => cstring($client, 'PLUGIN_APPLEMUSIC_SIGN_IN_AT') . " $url",
-		type => 'text',
-	};
 }
 
 sub _libNode {

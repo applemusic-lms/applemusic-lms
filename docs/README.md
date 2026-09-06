@@ -61,23 +61,24 @@ Saving a CDM/ffmpeg change restarts the helper automatically.
 
 ## 4. Sign in
 
-The helper serves a sign‑in page. From a browser **on your LAN**:
+**Settings → Advanced → Apple Music → Apple Music account** (or click the
+*"Not signed in"* row on the plugin's home screen — it opens the same page).
 
-```
-http://<LMS-HOST>:9863/auth
-```
+There's no "Sign in with Apple" button: the developer token the helper ships is
+Apple's web‑player token, locked to `apple.com`, so MusicKit's popup can't run
+elsewhere. Instead you paste your **media‑user‑token** once:
 
-The helper binds `127.0.0.1` only. From a machine that isn't the LMS host, tunnel:
+1. Open [music.apple.com](https://music.apple.com) in a browser and sign in.
+2. Open the browser console (<kbd>F12</kbd> / <kbd>⌥⌘J</kbd>), run
+   `copy(MusicKit.getInstance().musicUserToken)`, press Enter.
+3. Paste it into the field, click **Sign in & verify**.
 
-```bash
-ssh -L 9863:127.0.0.1:9863 <you>@<LMS-HOST>
-# then open http://localhost:9863/auth
-```
+The storefront is detected from the token — you don't enter a country. The token
+lives only in the helper's `config.json`; **Sign out** clears it. Re‑do this every
+~6 months when it expires (symptom: tracks 401).
 
-The page tells you to paste your **media‑user‑token** from a signed‑in
-`music.apple.com` tab (`copy(MusicKit.getInstance().musicUserToken)` in its console) and
-your country code. It's written into the helper's `config.json`. Re‑do this every ~6
-months.
+This is all through the LMS web UI, so a headless server needs no SSH tunnel. The
+helper's own `http://<host>:9863/auth` page still works if you prefer it.
 
 ---
 

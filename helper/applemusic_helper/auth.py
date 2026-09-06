@@ -11,18 +11,22 @@ the helper sends `Origin: https://music.apple.com` itself.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from importlib import resources
 
 from aiohttp import web
 
+from .apple_api import AppleApiError, NotAuthenticated
+
 _LOGGER = logging.getLogger(__name__)
 
+_VERIFY_TIMEOUT = 12  # seconds to wait for Apple before accepting the token unverified
 
-def _page(storefront: str) -> str:
-    html = resources.files(__package__).joinpath("musickit.html").read_text("utf-8")
-    return html.replace("%%STOREFRONT%%", storefront or "us")
+
+def _page() -> str:
+    return resources.files(__package__).joinpath("musickit.html").read_text("utf-8")
 
 
 def add_routes(app: web.Application) -> None:
@@ -30,12 +34,11 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/auth/", _handle_page)
     for path in ("/auth/token", "/auth/callback", "/token"):
         app.router.add_post(path, _handle_token)
+    app.router.add_post("/auth/logout", _handle_logout)
 
 
 async def _handle_page(request: web.Request) -> web.Response:
-    config = request.app["config"]
-    storefront = (request.query.get("sf") or config.storefront or "us").lower()
-    return web.Response(text=_page(storefront), content_type="text/html")
+    return web.Response(text=_page(), content_type="text/html")
 
 
 async def _handle_token(request: web.Request) -> web.Response:
@@ -51,6 +54,7 @@ async def _handle_token(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="missing / implausible media-user-token")
 
     storefront = (body.get("storefront") or config.storefront or "").lower()
+    prev = (config.media_user_token, config.media_user_token_ts, config.storefront)
     config.update(
         media_user_token=user_token,
         media_user_token_ts=int(time.time()),
@@ -61,20 +65,37 @@ async def _handle_token(request: web.Request) -> web.Response:
     # verify against Apple and pin the authoritative storefront
     try:
         catalog._storefront = None
-        sf = await catalog.storefront()
+        sf = await asyncio.wait_for(catalog.storefront(), _VERIFY_TIMEOUT)
         _LOGGER.info("Apple Music connected, storefront=%s", sf)
         return web.json_response({"status": "ok", "storefront": sf})
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Token stored but verification failed: %s", err)
-        if storefront:
-            return web.json_response(
-                {
-                    "status": "ok",
-                    "storefront": storefront,
-                    "warning": f"could not verify with Apple ({err}); "
-                    f"using the country you entered ({storefront}).",
-                }
-            )
-        return web.json_response(
-            {"error": f"token rejected by Apple: {err}"}, status=502
+    except NotAuthenticated as err:
+        # Apple actively rejected the credentials - this token is no good, undo
+        _LOGGER.warning("Sign-in rejected by Apple: %s", err)
+        config.update(
+            media_user_token=prev[0], media_user_token_ts=prev[1], storefront=prev[2]
         )
+        catalog._storefront = None
+        # 200 (not 5xx): LMS's async HTTP client discards error-response bodies,
+        # so the plugin can only see this message on a 2xx.
+        return web.json_response(
+            {"status": "error", "error": f"Apple rejected this token: {err}"}
+        )
+    except (asyncio.TimeoutError, AppleApiError, OSError) as err:
+        # stored, but we couldn't reach Apple to confirm right now - keep it;
+        # /health verifies once connectivity is back
+        _LOGGER.warning("Token saved, verification deferred: %s", err)
+        return web.json_response(
+            {
+                "status": "ok",
+                "storefront": storefront or config.storefront or "",
+                "warning": "saved, but couldn't reach Apple to verify just now",
+            }
+        )
+
+
+async def _handle_logout(request: web.Request) -> web.Response:
+    config = request.app["config"]
+    config.update(media_user_token="", media_user_token_ts=0, storefront="")
+    request.app["catalog"]._storefront = None
+    _LOGGER.info("Signed out of Apple Music")
+    return web.json_response({"status": "ok"})

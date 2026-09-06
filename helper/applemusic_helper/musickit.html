@@ -55,10 +55,6 @@
   <label for="tok">media-user-token</label>
   <textarea id="tok" placeholder="Aut… long base64-ish string ending in =="></textarea>
 
-  <label for="sf">Your Apple Music country</label>
-  <input id="sf" class="sf" value="%%STOREFRONT%%" maxlength="2" autocomplete="off">
-  <span class="muted">e.g. <code>gb</code>, <code>us</code>, <code>de</code></span>
-
   <div><button id="save" disabled>Save &amp; verify</button></div>
   <p id="status" class="muted">Enter a token to continue.</p>
 
@@ -73,7 +69,6 @@
 </div>
 <script>
   const tok = document.getElementById("tok");
-  const sf = document.getElementById("sf");
   const save = document.getElementById("save");
   const statusEl = document.getElementById("status");
 
@@ -93,17 +88,14 @@
       const resp = await fetch("/auth/token", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          media_user_token: tok.value.trim(),
-          storefront: sf.value.trim().toLowerCase(),
-        }),
+        body: JSON.stringify({ media_user_token: tok.value.trim() }),
       });
       const body = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(body.error || ("helper returned " + resp.status));
+      if (!resp.ok || body.error) throw new Error(body.error || ("helper returned " + resp.status));
       statusEl.className = "ok";
       statusEl.textContent = body.warning
         ? "Saved. " + body.warning
-        : "Connected — storefront " + (body.storefront || sf.value) +
+        : "Connected - Apple Music " + (body.storefront || "").toUpperCase() +
           ". Close this tab and return to LMS.";
       save.textContent = "Done";
     } catch (e) {

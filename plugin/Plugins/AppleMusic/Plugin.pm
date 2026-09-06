@@ -65,6 +65,9 @@ sub initPlugin {
 	if ( main::WEBUI ) {
 		require Plugins::AppleMusic::Settings;
 		Plugins::AppleMusic::Settings->new();
+
+		require Plugins::AppleMusic::Auth;
+		Plugins::AppleMusic::Auth->init;
 	}
 
 	require Plugins::AppleMusic::OPML;

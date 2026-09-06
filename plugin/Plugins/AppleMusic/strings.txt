@@ -29,10 +29,7 @@ PLUGIN_APPLEMUSIC_LOADING
 	EN	Loading from Apple Music…
 
 PLUGIN_APPLEMUSIC_NOT_SIGNED_IN
-	EN	Not signed in to Apple Music
-
-PLUGIN_APPLEMUSIC_SIGN_IN_AT
-	EN	Open this URL in a browser to sign in:
+	EN	Not signed in - open Settings to connect Apple Music
 
 PLUGIN_APPLEMUSIC_SIGN_IN_BUTTON
 	EN	Sign in to Apple Music

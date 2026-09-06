@@ -130,11 +130,10 @@ async def test_stream_pipes_ffmpeg_output(client):
 
 
 async def test_auth_page_served(client):
-    r = await client.get("/auth?sf=gb")
+    r = await client.get("/auth")
     assert r.status == 200
     text = await r.text()
     assert "media-user-token" in text
-    assert 'value="gb"' in text  # storefront hint substituted
 
 
 async def test_token_capture(client):
@@ -143,3 +142,46 @@ async def test_token_capture(client):
     body = await r.json()
     assert body["storefront"] == "gb"
     assert client.app["config"].media_user_token == "A" * 40
+
+
+async def test_token_rejected_rolls_back(client):
+    from applemusic_helper.apple_api import NotAuthenticated
+
+    client.app["config"].media_user_token = "GOOD" * 10
+    client.app["config"].storefront = "gb"
+
+    async def boom():
+        raise NotAuthenticated("Apple says no")
+
+    client.app["catalog"].storefront = boom
+
+    r = await client.post("/auth/token", json={"media_user_token": "B" * 40})
+    assert r.status == 200                       # 2xx so the plugin can read the body
+    body = await r.json()
+    assert body["status"] == "error"
+    assert client.app["config"].media_user_token == "GOOD" * 10   # rolled back
+
+
+async def test_token_kept_when_apple_unreachable(client):
+    client.app["config"].media_user_token = ""
+    client.app["config"].storefront = ""
+
+    async def offline():
+        raise OSError("Temporary failure in name resolution")
+
+    client.app["catalog"].storefront = offline
+
+    r = await client.post("/auth/token", json={"media_user_token": "C" * 40})
+    assert r.status == 200
+    body = await r.json()
+    assert body["status"] == "ok"
+    assert body.get("warning")
+    assert client.app["config"].media_user_token == "C" * 40      # kept, not rolled back
+
+
+async def test_logout_clears_token(client):
+    assert client.app["config"].media_user_token
+    r = await client.post("/auth/logout")
+    assert r.status == 200
+    assert client.app["config"].media_user_token == ""
+    assert client.app["config"].storefront == ""

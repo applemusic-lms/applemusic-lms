@@ -96,5 +96,4 @@ TRANSCODING,ISWINDOWS,ISMAC}` constants.
 - Online library importer (`Importer.pm`) so tracks land in the main LMS library.
 - `DontStopTheMusic` integration.
 - Playlist editing.
-- Proxy `/auth` through the LMS web server (no SSH tunnel for headless sign-in).
 - macOS ffmpeg auto-download (no reliable GitHub-hosted static source yet).

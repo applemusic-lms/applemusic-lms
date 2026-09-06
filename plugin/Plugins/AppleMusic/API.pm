@@ -112,6 +112,40 @@ sub reloadCdm {
 	)->post($url);
 }
 
+# POST JSON to the helper. On a non-2xx the ecb gets the helper's {error} text.
+sub _post {
+	my ($class, $path, $body, $cb, $ecb) = @_;
+	my $url = _base() . $path;
+	Slim::Networking::SimpleAsyncHTTP->new(
+		sub {
+			my $data = eval { from_json($_[0]->content) } || {};
+			$cb->($data) if $cb;
+		},
+		sub {
+			my ($http, $err, $res) = @_;
+			my $content = ($res && $res->content) || (eval { $http->content }) || '';
+			my $msg = eval { from_json($content)->{error} }
+				|| $err || ($http && $http->error) || 'request failed';
+			$ecb->($msg, ($res && $res->code) || ($http && $http->code) || 0) if $ecb;
+		},
+		{ timeout => 30 },
+	)->post($url, 'Content-Type' => 'application/json', to_json($body || {}));
+}
+
+# Apple Music sign-in (media-user-token paste) and sign-out.
+sub setUserToken {
+	my ($class, $token, $storefront, $cb, $ecb) = @_;
+	$class->_post('/auth/token', {
+		media_user_token => $token,
+		storefront       => ($storefront || ''),
+	}, $cb, $ecb);
+}
+
+sub signOut {
+	my ($class, $cb, $ecb) = @_;
+	$class->_post('/auth/logout', {}, $cb, $ecb);
+}
+
 sub search {
 	my ($class, $term, $types, $cb, $ecb) = @_;
 	$class->get({
