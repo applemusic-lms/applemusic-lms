@@ -20,3 +20,8 @@ private_key.pem
 .DS_Store
 .idea/
 .vscode/
+*.spec
+
+# crash dumps
+core
+core.*

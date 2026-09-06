@@ -25,7 +25,8 @@ sub name { 'PLUGIN_APPLEMUSIC_NAME' }
 sub page { 'plugins/AppleMusic/settings/basic.html' }
 
 sub prefs {
-	return ( $prefs, qw(helperUrl helperPort audioFormat cleanupTags
+	# helperUrl is intentionally omitted - Helper.pm owns it, there is no field
+	return ( $prefs, qw(helperPort audioFormat cleanupTags
 	                    ffmpegSource ffmpegPath cdmClientId cdmPrivateKey cdmWvd
 	                    helperBinary distRepo) );
 }
@@ -67,7 +68,7 @@ sub handler {
 	$params->{amHealth}    = $health if $health && ref $health;
 	$params->{amHealthAge} = $age if defined $age;
 	$params->{amAuthUrl}   = ($health && $health->{auth_url})
-		|| ($prefs->get('helperUrl') . '/auth');
+		|| (($prefs->get('helperUrl') || 'http://127.0.0.1:9863') . '/auth');
 	$params->{amPlatform}  = Plugins::AppleMusic::Helper->platform;
 
 	my $body = $class->SUPER::handler( $client, $params, $callback, @args );

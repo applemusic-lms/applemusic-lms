@@ -44,8 +44,9 @@ $prefs->init({
 	distRepo     => '',          # advanced: owner/repo override for downloads
 });
 
+# helperUrl is set by Helper.pm at runtime, not user-editable; tolerate empty
 $prefs->setValidate({
-	validator => sub { $_[1] =~ m{^https?://[^/\s]+/?$} },
+	validator => sub { !defined $_[1] || $_[1] eq '' || $_[1] =~ m{^https?://[^/\s]+/?$} },
 }, 'helperUrl');
 
 $prefs->setValidate({ 'int' => 1, low => 1024, high => 65535 }, 'helperPort');

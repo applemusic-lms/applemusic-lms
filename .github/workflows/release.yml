@@ -17,58 +17,47 @@ on:
 
 env:
   PY: "3.12"
+  # portable CPython (shared libpython, targets glibc 2.17) - PyInstaller can't
+  # use manylinux's own static python. pinned for reproducibility.
+  PBS_TAG: "20260901"
+  PBS_VER: "3.12.14"
 
 jobs:
-  # ------------------------------------------------------------------ helper
-  helper:
+  # ---------------------------------------------------------------- helper linux
+  # Spotty ships musl-static Rust binaries (no libc dep at all). We can't do
+  # that with a frozen CPython, so we do the Python-world equivalent: build in
+  # manylinux2014 (CentOS 7, glibc 2.17) + python-build-standalone (a shared
+  # libpython, also 2.17). Result: the whole bundle needs only GLIBC_2.17, so
+  # it runs on any Linux from the last decade.
+  #
+  # checkout + setver run on the runner (modern node); only the compile runs
+  # in the ancient container, via `docker run` - so node-in-CentOS-7 is a
+  # non-issue.
+  helper-linux:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { runner: ubuntu-22.04,     platform: x86_64-linux }
-          - { runner: ubuntu-24.04-arm, platform: aarch64-linux }
-          - { runner: windows-latest,   platform: win-x64 }
-          # Apple Silicon only. non-blocking (unsigned anyway). Intel macOS
-          # (macos-13) is omitted: its runners can sit un-picked-up for hours,
-          # which stalls the whole release. Add back if there's demand.
-          - { runner: macos-14,         platform: darwin-arm64,   optional: true }
+          - { runner: ubuntu-22.04,     platform: x86_64-linux,  arch: x86_64,  image: quay.io/pypa/manylinux2014_x86_64 }
+          - { runner: ubuntu-24.04-arm, platform: aarch64-linux, arch: aarch64, image: quay.io/pypa/manylinux2014_aarch64 }
     runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.optional || false }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setver
-      - uses: actions/setup-python@v5
-        with: { python-version: "${{ env.PY }}" }
-      - name: build
-        shell: bash
+      - name: build (manylinux2014 + python-build-standalone)
         run: |
-          python -m pip install -U pip pyinstaller
-          python -m pip install -r helper/requirements.txt ./helper
-          pyinstaller --onefile --name applemusic-helper --console \
-            --collect-all pywidevine \
-            --collect-submodules aiohttp \
-            --collect-data applemusic_helper \
-            helper/pyinstaller_entry.py
-      - name: selftest + stage
-        shell: bash
-        run: |
-          mkdir -p out
-          if [ "${{ matrix.platform }}" = win-x64 ]; then
-            dist/applemusic-helper.exe --selftest
-            dist/applemusic-helper.exe --version
-            cp dist/applemusic-helper.exe "out/applemusic-helper-${{ matrix.platform }}.exe"
-          else
-            dist/applemusic-helper --selftest
-            dist/applemusic-helper --version
-            cp dist/applemusic-helper "out/applemusic-helper-${{ matrix.platform }}"
-          fi
+          docker run --rm -v "$PWD:/io" -w /io \
+            -e PBS_TAG -e PBS_VER \
+            "${{ matrix.image }}" \
+            bash scripts/build-helper-linux.sh "${{ matrix.arch }}"
+          mkdir -p out && cp dist/applemusic-helper "out/applemusic-helper-${{ matrix.platform }}"
       - uses: actions/upload-artifact@v4
         with:
           name: helper-${{ matrix.platform }}
           path: out/*
 
-  # 32-bit ARM via QEMU - flaky, so non-blocking: a failure here still lets a
-  # release go out (64-bit Pis use aarch64-linux).
+  # ---------------------------------------------------------------- helper armv7
+  # 32-bit ARM via QEMU - flaky, so non-blocking (64-bit Pis use aarch64-linux).
   helper-armv7:
     runs-on: ubuntu-22.04
     continue-on-error: true
@@ -95,6 +84,48 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: helper-arm-linux, path: out/* }
 
+  # ---------------------------------------------------------------- helper macos
+  helper-macos:
+    runs-on: macos-14           # Apple Silicon; Intel omitted (runner queues)
+    continue-on-error: true     # non-blocking (unsigned binary anyway)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setver
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PY }}" }
+      - name: build + selftest
+        run: |
+          python -m pip install -U pip pyinstaller
+          python -m pip install -r helper/requirements.txt ./helper
+          pyinstaller --onefile --name applemusic-helper --console \
+            --collect-all pywidevine --collect-submodules aiohttp \
+            --collect-data applemusic_helper helper/pyinstaller_entry.py
+          ./dist/applemusic-helper --selftest
+          mkdir -p out && cp dist/applemusic-helper out/applemusic-helper-darwin-arm64
+      - uses: actions/upload-artifact@v4
+        with: { name: helper-darwin-arm64, path: out/* }
+
+  # ---------------------------------------------------------------- helper windows
+  helper-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setver
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PY }}" }
+      - name: build + selftest
+        shell: bash
+        run: |
+          python -m pip install -U pip pyinstaller
+          python -m pip install -r helper/requirements.txt ./helper
+          pyinstaller --onefile --name applemusic-helper --console \
+            --collect-all pywidevine --collect-submodules aiohttp \
+            --collect-data applemusic_helper helper/pyinstaller_entry.py
+          dist/applemusic-helper.exe --selftest
+          mkdir -p out && cp dist/applemusic-helper.exe out/applemusic-helper-win-x64.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: helper-win-x64, path: out/* }
+
   # ------------------------------------------------------------------ ffmpeg
   ffmpeg:
     runs-on: ubuntu-22.04
@@ -106,9 +137,13 @@ jobs:
 
   # ------------------------------------------------------------------ assemble
   assemble:
-    needs: [helper, helper-armv7, ffmpeg]
-    # run as long as the required builds succeeded; armv7 is best-effort
-    if: ${{ always() && needs.helper.result == 'success' && needs.ffmpeg.result == 'success' }}
+    needs: [helper-linux, helper-armv7, helper-macos, helper-windows, ffmpeg]
+    # required: linux + windows + ffmpeg. macOS and armv7 are best-effort.
+    if: >-
+      ${{ always()
+          && needs.helper-linux.result == 'success'
+          && needs.helper-windows.result == 'success'
+          && needs.ffmpeg.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write        # only used by the release step (tags only)
